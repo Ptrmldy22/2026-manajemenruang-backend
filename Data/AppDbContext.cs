@@ -11,5 +11,7 @@ namespace _2026_manajemenruang_backend.Data
         }
 
         public DbSet<Ruangan> Ruangans { get; set; }
+        public DbSet<Peminjaman> Peminjaman { get; set; }
+
     }
 }
