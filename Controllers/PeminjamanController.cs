@@ -16,6 +16,7 @@ namespace _2026_manajemenruang_backend.Controllers
             _context = context;
         }
 
+        // GET: api/Peminjaman
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Peminjaman>>> GetPeminjaman()
         {
@@ -24,6 +25,7 @@ namespace _2026_manajemenruang_backend.Controllers
                 .ToListAsync();
         }
 
+        // GET: api/Peminjaman/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Peminjaman>> GetPeminjaman(int id)
         {
@@ -32,31 +34,83 @@ namespace _2026_manajemenruang_backend.Controllers
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (peminjaman == null)
-                return NotFound();
+                return NotFound("Data peminjaman tidak ditemukan.");
 
             return peminjaman;
         }
 
+        // POST: api/Peminjaman
         [HttpPost]
         public async Task<ActionResult<Peminjaman>> PostPeminjaman(Peminjaman peminjaman)
         {
+            // Validasi ruangan
+            var ruangan = await _context.Ruangans.FindAsync(peminjaman.RuanganId);
+            if (ruangan == null)
+                return BadRequest("Ruangan tidak ditemukan.");
+
+            // Validasi bentrok waktu
+            var bentrok = await _context.Peminjaman.AnyAsync(p =>
+                p.RuanganId == peminjaman.RuanganId &&
+                p.Status != "Rejected" &&
+                (
+                    peminjaman.TanggalPinjam < p.TanggalSelesai &&
+                    peminjaman.TanggalSelesai > p.TanggalPinjam
+                )
+            );
+
+            if (bentrok)
+                return BadRequest("Ruangan sudah dipinjam pada rentang waktu tersebut.");
+
+            // Set default status
+            peminjaman.Status = "Pending";
+
             _context.Peminjaman.Add(peminjaman);
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetPeminjaman), new { id = peminjaman.Id }, peminjaman);
         }
 
+        // PUT: api/Peminjaman/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutPeminjaman(int id, Peminjaman peminjaman)
         {
             if (id != peminjaman.Id)
-                return BadRequest();
+                return BadRequest("ID tidak sesuai.");
 
-            _context.Entry(peminjaman).State = EntityState.Modified;
+            var existing = await _context.Peminjaman.FindAsync(id);
+            if (existing == null)
+                return NotFound("Data peminjaman tidak ditemukan.");
+
+            // Validasi ruangan
+            var ruangan = await _context.Ruangans.FindAsync(peminjaman.RuanganId);
+            if (ruangan == null)
+                return BadRequest("Ruangan tidak ditemukan.");
+
+            // Validasi bentrok waktu (kecuali data sendiri)
+            var bentrok = await _context.Peminjaman.AnyAsync(p =>
+                p.Id != id &&
+                p.RuanganId == peminjaman.RuanganId &&
+                p.Status != "Rejected" &&
+                (
+                    peminjaman.TanggalPinjam < p.TanggalSelesai &&
+                    peminjaman.TanggalSelesai > p.TanggalPinjam
+                )
+            );
+
+            if (bentrok)
+                return BadRequest("Ruangan sudah dipinjam pada rentang waktu tersebut.");
+
+            // Update data
+            existing.RuanganId = peminjaman.RuanganId;
+            existing.NamaPeminjam = peminjaman.NamaPeminjam;
+            existing.TanggalPinjam = peminjaman.TanggalPinjam;
+            existing.TanggalSelesai = peminjaman.TanggalSelesai;
+            existing.Keterangan = peminjaman.Keterangan;
+            existing.Status = peminjaman.Status;
+
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
-
     }
 }
